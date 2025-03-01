@@ -1,0 +1,57 @@
+CREATE TABLE region_rel
+(
+   region_id INT NOT NULL PRIMARY KEY, 
+   reigon TEXT NOT NULL
+);
+CREATE TABLE prof_rel
+(
+   profession_id INT NOT NULL PRIMARY KEY, 
+   profession TEXT NOT NULL
+);
+CREATE TABLE employment
+( 
+   date DATE NOT NULL,
+   region_id INT NOT NULL,
+   labor_force INT,
+   employment_level INT,
+   labor_force_participation_rate FLOAT,
+   unemployment_rate FLOAT,
+   employment_population_ratio FLOAT,
+   PRIMARY KEY (date, region_id),
+   FOREIGN KEY (region_id) REFERENCES region_rel(region_id)
+  );
+
+CREATE TABLE earnings
+( 
+   date DATE NOT NULL,
+   region_id INT NOT NULL,
+   profession_id INT NOT NULL,
+   ave_weekly_earnings FLOAT,
+   PRIMARY KEY (date, region_id, profession_id),
+   FOREIGN KEY (region_id) REFERENCES region_rel(region_id),
+   FOREIGN KEY (profession_id) REFERENCES prof_rel(profession_id)
+); 
+CREATE TABLE food_prices
+(
+   date DATE NOT NULL,
+   region_id INT NOT NULL,
+   sliced_bacon_lb FLOAT,
+   white_bread_lb FLOAT,
+   coffee_lb FLOAT,
+   eggs_dz FLOAT,
+   gas_gl FLOAT,
+   PRIMARY KEY (date, region_id),
+   FOREIGN KEY (region_id) REFERENCES region_rel (region_id)
+);
+
+CREATE TABLE inflation
+(
+    date DATE NOT NULL,
+    region_id INT NOT NULL,
+    cpi FLOAT,
+    cpi_less_food_energy FLOAT,
+    cpi_medical FLOAT,
+    PRIMARY KEY (date, region_id),
+    FOREIGN KEY (region_id) REFERENCES region_rel(region_id)
+);
+
