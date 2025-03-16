@@ -1,0 +1,585 @@
+Summary
+My database contains time series data downloaded from the BLS website and includes data on employment, food prices, and inflation. Data can be downloaded directly from the BLS website by entering the series id. Once downloaded, minor data cleaning was required before I was able to upload it to PostgreSQL using the GUI. 
+Data References
+All data is hosted at the U.S. Bureau of Labor Statistics (https://www.bls.gov/data/) and is derived from the following three surveys.
+From the BLS website:
+ “The Current Population Survey (CPS) provides a wealth of information on the nation’s labor force including data on the employed, unemployed, and those not in the labor force. Key CPS measures are the unemployment rate, labor force participation rate, and employment-population ratio.”
+“The Current Employment Statistics (CES) program produces detailed industry estimates of nonfarm employment, hours, and earnings of workers on payrolls. CES National Estimates produces data for the nation, and CES State and Metro Area produces estimates for all 50 States, the District of Columbia, Puerto Rico, the Virgin Islands, and about 450 metropolitan areas and divisions.”
+“The Consumer Price Index (CPI) is a measure of the average change over time in the prices paid by urban consumers for a market basket of consumer goods and services. Indexes are available for the U.S. and various geographic areas. Average price data for select utility, automotive fuel, and food items are also available.”
+The following bullets list the source for each attribute in my database that is sourced from the BLS.  
+Format: Table; Survey; Series Title; Series ID
+• Employment ; CPS; Civilian Labor Force Level; LNS11000000
+• Employment ; CPS; Labor Force Participation Rate; LNS11300000 
+• Employment ; CPS; Employment Level; LNS12000000
+• Employment ; CPS; Employment-Population Ratio; LNS12300000
+• Employment ; CPS; Unemplyment Rate; LNS14000000
+• Earnings; CES; Average weekly earnings of all employees, total private; CES0500000011
+• Inflation; CPI; All items in U.S. city average, all urban consumers; CUUR0000SA0
+• Inflation; CPI; All items less food and energy in U.S. city average, all urban consumers; CUUR0000SA0L1E
+• Inflation: CPI; Medical care in U.S. city average, all urban consumers; CUUR0000SAM
+• Food_Prices; CPI; Bacon, sliced, per lb, average price; APU0000704111
+• Food_Prices; CPI Bread, white, pan, per lb., average price; APU0000702111
+• Food_Prices; CPI; Coffee, 100%, ground roast, all sizes, per lb., average price; APU0000717311
+• Food_Prices; CPI; Eggs, grade A, large, per doz., average price; APU0000708111
+• Food_Prices; CPI; Gasoline, unleaded regular, per gallon/3.785 liters, average price; APU000074714
+ER Diagram
+No changes were made to my ER diagram.
+ 
+• prof_rel(profession_id, profession)
+• region_rel(region_id, region)
+• inflation(date, region_id,  cpi, cpi_less_food_energy, cpi_medical)
+• region_id is a foreign key that references region_rel.region_id
+• food_prices(date, region_id,  sliced_bacon_lb, white_bread_lb, coffee_lb, eggs_dz, gas_gl)
+• region_id is a foreign key that references region_rel.region_id
+• earnings(date,  region_id, profession_id,  ave_weekly_earnings)
+• profession_id is a foreign key that references prof_rel.profession_id
+• region_id is a foreign key that references region_rel.region_id
+• employment(date,  region_id, labor_force, employment_level, labor_force_participation_rate, unemployment_rate, employment_population_ratio)
+	• region_id is a foreign key that references region_rel.region_id
+
+Create Statements
+CREATE TABLE employment
+( 
+   date DATE NOT NULL,
+   region_id INT NOT NULL,
+   labor_force INT,
+   employment_level INT,
+   labor_force_participation_rate FLOAT,
+   unemployment_rate FLOAT,
+   employment_population_ratio FLOAT,
+   PRIMARY KEY (date, region_id),
+   FOREIGN KEY (region_id) REFERENCES region_rel(region_id)
+  );
+
+CREATE TABLE earnings
+( 
+   date DATE NOT NULL,
+   region_id INT NOT NULL,
+   profession_id INT NOT NULL,
+   ave_weekly_earnings FLOAT,
+   PRIMARY KEY (date, region_id, profession_id),
+   FOREIGN KEY (region_id) REFERENCES region_rel(region_id),
+   FOREIGN KEY (profession_id) REFERENCES prof_rel(profession_id)
+); 
+
+CREATE TABLE food_prices
+(
+   date DATE NOT NULL,
+   region_id INT NOT NULL,
+   sliced_bacon_lb FLOAT,
+   white_bread_lb FLOAT,
+   coffee_lb FLOAT,
+   eggs_dz FLOAT,
+   gas_gl FLOAT,
+   PRIMARY KEY (date, region_id),
+   FOREIGN KEY (region_id) REFERENCES region_rel (region_id)
+);
+
+CREATE TABLE region_rel
+(
+   region_id INT NOT NULL PRIMARY KEY, 
+   region TEXT NOT NULL
+);
+
+CREATE TABLE inflation
+(
+    date DATE NOT NULL,
+    region_id INT NOT NULL,
+    cpi FLOAT,
+    cpi_less_food_energy FLOAT,
+    cpi_medical FLOAT,
+    PRIMARY KEY (date, region_id),
+    FOREIGN KEY (region_id) REFERENCES region_rel(region_id)
+);
+
+CREATE TABLE prof_rel
+(
+   profession_id INT NOT NULL PRIMARY KEY, 
+   profession TEXT NOT NULL
+);
+
+I am using time series data for four of my tables. Each of the four tables contains an index on the date to improve the performance of my queries.
+CREATE INDEX emp_date_idx ON employment (date)
+CREATE INDEX fp_date_idx ON food_prices(date);
+CREATE INDEX inf_date_idx ON inflation (date);
+CREATE INDEX earn_date_idx ON earnings (date);
+
+Data Cleaning and Populating the Database
+
+The BLS provides the ability to download data in various formats.
+1.	https://data.bls.gov/series-report. This page allows you download the desired data using the series-id(s). The screen shot below is for the unemployment rate.
+ 
+2.	When you select next you are taken to the following page. There are several options to select from including the data format and time frame. Select Retrieve Data.
+
+ 
+
+3.	Select download to get an Excel file of the data. 
+ 
+4.	Example of what the data looks like with no modifications.  
+Replace the series id with the attribute name, convert the date formats, and transpose the data. 
+ 
+5.	The final step is to save as a csv and load to the database using the GUI.
+To verify and check data integrity I made sure that the number of rows imported matched the csv file and that there were no nulls. I also spot checked several data points in each table and visually compared to the BLS values.
+
+Screenshots of Tables
+ 
+ 
+
+20 Questions 
+I modified and replaced many of my original questions. The primary reasons were to increase the difficulty of the query and to incorporate the profession relationship that I added after Part 1. 
+1.	I changed this question to make it more challenging and because I do not have weeks unemployed in my data as originally planned.
+
+Original: What is the date(s) where the difference between the average weeks unemployed and median weeks unemployed was at a minimum and maximum.
+
+Updated: Which profession and region had the maximum and minimum weekly earnings for December 2024?
+
+SQL
+SELECT 
+    e.date, 
+    p.profession,
+    r.region,
+    e.ave_weekly_earnings
+FROM earnings e, prof_rel p, region_rel r
+WHERE e.profession_id = p.profession_id
+AND e.region_id = r.region_id
+AND e.date = '2024-12-31'
+AND ave_weekly_earnings = (
+    SELECT MAX(ave_weekly_earnings) 
+    FROM earnings
+    WHERE date = '2024-12-31'
+)
+UNION
+SELECT 
+    e.date, 
+    p.profession,
+    r.region,
+    e.ave_weekly_earnings
+FROM earnings e, prof_rel p, region_rel r
+WHERE e.profession_id = p.profession_id
+AND e.region_id = r.region_id
+AND e.date = '2024-12-31'
+AND ave_weekly_earnings = (
+    SELECT MIN(ave_weekly_earnings) 
+    FROM earnings
+    WHERE date = '2024-12-31'
+);
+
+Screenshot
+ 
+
+
+2.	Compare the unemployment levels between California and Nevada for the past six months.
+SQL
+SELECT 
+    date, 
+    region_rel.region AS region, 
+    unemployment_rate 
+FROM employment
+JOIN region_rel ON employment.region_id = region_rel.region_id
+WHERE region_rel.region IN ('California', 'Nevada') 
+    AND date > '2024-06-30'
+ORDER BY 
+    date, region;
+Screenshot
+ 
+3.	I updated this question to make it more challenging.
+
+Original: Calculate the average sum of the employed population for each region over the past six months.
+
+Updated: Which regions had an increase in the average employment level for 2024 compared to 2023?
+
+SQL
+SELECT 
+    r.region,
+    TO_CHAR(
+        AVG(CASE WHEN e.date >= '2024-01-31' THEN e.employment_level END) -
+        AVG(CASE WHEN e.date >= '2023-01-31' AND e.date <= '2023-12-31' THEN e.employment_level END), 
+        'FM999,999,999') AS change
+FROM employment e JOIN region_rel r ON e.region_id = r.region_id
+GROUP BY r.region
+HAVING 
+    AVG(CASE WHEN e.date >= '2024-01-31' THEN e.employment_level END) >
+    AVG(CASE WHEN e.date >= '2023-01-31' AND e.date <= '2023-12-31' THEN e.employment_level END);
+
+Screenshot
+ 
+
+4.	I updated the question to make it more challenging by adding two subqueries and the National filter.
+
+Original: Identify the top 3 dates with the highest labor force participation rate in each region.
+
+Updated: When was the national labor force participation rate at its highest, and what was the unemployment rate during this time?
+
+SQL
+SELECT 
+    e.date, 
+    e.labor_force_participation_rate,
+    e.unemployment_rate
+FROM employment e
+WHERE e.region_id = (SELECT region_id FROM region_rel WHERE region= 'National')
+    AND e.labor_force_participation_rate =
+     (SELECT MAX(e.labor_force_participation_rate)
+       FROM employment e
+       JOIN region_rel r ON e.region_id = r.region_id 
+       WHERE r.region = 'National'
+       GROUP BY e.region_id);
+
+
+Screenshot
+ 
+
+5.	I changed this question because I have enough max and min questions. Also, I added profession after I wrote the original, and I want to utilize this relationship.
+
+Original: Determine the difference in the average labor force participation rate between the highest and lowest performing regions over the past year.
+
+Updated: What was the pandemic impact to average weekly earnings by region and profession?
+
+SQL
+SELECT 
+    r.region AS region,
+    p.profession AS profession,
+    TO_CHAR(
+    AVG(CASE WHEN EXTRACT(YEAR FROM ea.date) = 2020 THEN ea.ave_weekly_earnings END) -
+    AVG(CASE WHEN EXTRACT(YEAR FROM ea.date) = 2019 THEN ea.ave_weekly_earnings END)
+, 'FM999,999,999') AS change_in_weekly_earnings
+FROM earnings ea
+JOIN region_rel r ON ea.region_id = r.region_id
+JOIN prof_rel p ON ea.profession_id = p.profession_id
+JOIN employment emp ON ea.date = emp.date AND ea.region_id = emp.region_id
+WHERE EXTRACT(YEAR FROM ea.date) IN (2019, 2020)
+GROUP BY r.region, p.profession
+ORDER BY region, profession;
+
+Screenshot
+ 
+
+6.	This is replacing question 17 which asks about weeks unemployed (not in db). It is also a continuation of five. 
+
+Original: Compare the average weeks unemployed in Dec 2020 to Dec 2024 for all states and the national.
+
+Updated: What was the impact on the average employment level for each region during the pandemic?
+
+SQL
+SELECT 
+    r.region AS region,
+   TO_CHAR(
+     AVG(CASE WHEN EXTRACT(YEAR FROM emp.date) = 2020 THEN emp.employment_level END) -
+     AVG(CASE WHEN EXTRACT(YEAR FROM emp.date) = 2019 THEN emp.employment_level END),
+    'FM999,999,999') AS change_in_employment_level
+FROM earnings ea
+JOIN region_rel r ON ea.region_id = r.region_id
+JOIN employment emp ON ea.date = emp.date AND ea.region_id = emp.region_id
+WHERE EXTRACT(YEAR FROM ea.date) IN (2019, 2020)
+GROUP BY r.region
+ORDER BY region;
+
+Screenshot
+ 
+
+7.	I made a minor change to this question and instead I am bringing in the year end inflation for all three measures. The inflation rate is the 12-month change, so the year end is the same and the annual. 
+
+Original: What is the average annual medical inflation for the last 5 years?
+
+Updated: What is the year end/annual inflation for all three measures for all years?
+
+SQL
+SELECT 
+    date, 
+    cpi, 
+    cpi_less_food_energy, 
+    cpi_medical
+FROM inflation
+WHERE EXTRACT(MONTH FROM date) = 12
+AND EXTRACT(DAY FROM date) = 31
+ORDER BY date DESC;
+
+Screenshot:
+ 
+
+8.	This question does not make a lot of sense, and I don’t really like it. I am changing it to query food prices and making it a bit more challenging. 
+
+Original: From 2019-2024, what was the mean and median inflation less food and energy?
+
+Updated: What is the National average price of a dozen eggs for 2019 through 2024?
+
+SQL
+SELECT
+TO_CHAR(AVG(CASE WHEN EXTRACT(YEAR FROM f.date) = 2019 THEN f.eggs_dz END),
+'FM999,999,999.99') AS egg_price_2019,
+TO_CHAR(AVG(CASE WHEN EXTRACT(YEAR FROM f.date) = 2020 THEN f.eggs_dz END),
+'FM999,999,999.99') AS egg_price_2020,
+TO_CHAR(AVG(CASE WHEN EXTRACT(YEAR FROM f.date) = 2021 THEN f.eggs_dz END),
+'FM999,999,999.99') AS egg_price_2021,
+TO_CHAR(AVG(CASE WHEN EXTRACT(YEAR FROM f.date) = 2022 THEN f.eggs_dz END),
+'FM999,999,999.99') AS egg_price_2022,
+TO_CHAR(AVG(CASE WHEN EXTRACT(YEAR FROM f.date) = 2023 THEN f.eggs_dz END),
+'FM999,999,999.99') AS egg_price_2023,
+TO_CHAR(AVG(CASE WHEN EXTRACT(YEAR FROM f.date) = 2024 THEN f.eggs_dz END),
+'FM999,999,999.99') AS egg_price_2024
+
+FROM food_prices f, region_rel r
+WHERE r.region_id = f.region_id
+AND r.region = 'National';
+
+Screenshot
+ 
+
+9.	The data to answer this question is not in the db. 
+
+Original: What is the Oregon and Washington unemployment rate when California’s inflation rate was at a minimum?
+
+Updated: What is the unemployment rate, price per pound of bacon, and the cpi for year-end over the last five years?
+
+SQL
+SELECT 
+    e.date,
+    e.unemployment_rate,
+    f.sliced_bacon_lb AS bacon_price,
+    i.cpi
+FROM employment e
+JOIN region_rel r ON e.region_id = r.region_id
+JOIN food_prices f ON e.date = f.date AND e.region_id = f.region_id
+JOIN inflation i ON e.date = i.date AND e.region_id = i.region_id
+WHERE r.region= 'National'
+AND e.date IN ('2024-12-31', '2023-12-31','2022-12-31','2021-12-31','2020-12-31')
+ORDER BY e.date;
+
+Screenshot
+ 
+
+10.	Changing this question to make it more challenging. 
+
+Original: Which west coast state has the largest labor force participation rate in December 2018?
+
+Updated: Translate the weekly earnings for each profession into pounds of bacon for December 2021. 
+
+SQL
+SELECT 
+    p.profession AS profession,
+    TO_CHAR((ea.ave_weekly_earnings / f.sliced_bacon_lb),'FM999,999,999') AS 
+weekly_bacon_earnings_lbs 
+FROM earnings ea
+JOIN food_prices f ON ea.date = f.date AND ea.region_id = f.region_id
+JOIN prof_rel p ON ea.profession_id = p.profession_id
+WHERE ea.date = '2021-12-31';
+
+Screenshot
+ 
+
+11.	Compare the average employment level in Utah for  2024 and 2020.
+
+SQL
+SELECT 
+    r.region,
+    TO_CHAR(
+        AVG(CASE WHEN e.date >= '2024-01-31' AND e.date <= '2024-12-31' THEN e.employment_level END),
+        'FM999,999,999') AS ave_2024,
+    TO_CHAR(
+         AVG(CASE WHEN e.date >= '2023-01-31' ANd e.date <= '2023-12-1' THEN        e.employment_level END),
+          'FM999,999,999') AS ave_2023
+FROM employment e JOIN region_rel r ON e.region_id = r.region_id
+WHERE r.region = 'Utah'
+GROUP BY r.region;
+
+Screenshot
+ 
+
+12.	Substituted labor force for population as population did not make it in the final db.
+
+Original: For each state, how much has the civilian population increased from 2023 to 2024?
+Updated: For each state, how much has the labor force increased from 2023 to 2024?
+SQL
+SELECT 
+    r.region,
+    SUM(CASE WHEN e.date = '2024-12-31' THEN e.labor_force ELSE 0 END) -
+    SUM(CASE WHEN e.date = '2023-12-31' THEN e.labor_force ELSE 0 END) AS variance
+FROM employment e
+JOIN region_rel r ON e.region_id = r.region_id
+WHERE r.region <> 'National'
+GROUP BY r.region
+
+Screenshot
+ 
+
+13.	The original question was answered in question 7. 
+
+Original: What is the average of all annual inflation metrics for the last 5 years?
+
+Updated: What is the annual national inflation rate for all the food items in 2022? 
+
+SQL
+SELECT
+  TO_CHAR(
+    ((SUM(CASE WHEN f.date = '2022-12-31' THEN f.sliced_bacon_lb ELSE 0 END) /
+      SUM(CASE WHEN f.date = '2021-12-31' THEN f.sliced_bacon_lb ELSE 0 END)) - 1) * 100,
+    'FM999,999,999.00') AS "2022_Bacon_Inflation",
+  TO_CHAR(
+    ((SUM(CASE WHEN f.date = '2022-12-31' THEN f.coffee_lb ELSE 0 END) /
+      SUM(CASE WHEN f.date = '2021-12-31' THEN f.coffee_lb ELSE 0 END)) - 1) * 100,
+    'FM999,999,999.00') AS "2022_Coffee_Inflation",
+  TO_CHAR(
+    ((SUM(CASE WHEN f.date = '2022-12-31' THEN f.white_bread_lb ELSE 0 END) /
+      SUM(CASE WHEN f.date = '2021-12-31' THEN f.white_bread_lb ELSE 0 END)) - 1) * 100,
+    'FM999,999,999.00') AS "2022_Bread_Inflation",
+  TO_CHAR(
+    ((SUM(CASE WHEN f.date = '2022-12-31' THEN f.eggs_dz ELSE 0 END) /
+      SUM(CASE WHEN f.date = '2021-12-31' THEN f.eggs_dz ELSE 0 END)) - 1) * 100,
+    'FM999,999,999.00') AS "2022_Eggs_Inflation",
+ TO_CHAR(
+    ((SUM(CASE WHEN f.date = '2022-12-31' THEN f.gas_gl ELSE 0 END) /
+      SUM(CASE WHEN f.date = '2021-12-31' THEN f.gas_gl ELSE 0 END)) - 1) * 100,
+    'FM999,999,999.00') AS "2022_Gas_Inflation"
+FROM food_prices f, region_rel r
+WHERE f.region_id = r.region_id
+AND r.region = 'National'
+AND f.date IN ('2021-12-31', '2022-12-31')
+GROUP BY r.region_id;
+
+
+Screenshot
+ 
+
+14.	Updated for grammar.
+Original: Which did Washington have the maximum labor force?
+Updated: When did Washington have the maximum labor force?
+
+SQL
+SELECT 
+    e.date, 
+    e.labor_force
+FROM employment e
+JOIN region_rel r ON e.region_id = r.region_id
+WHERE r.region = 'Washington'
+AND e.labor_force = (
+   SELECT MAX(e2.labor_force)
+   FROM employment e2
+   JOIN region_rel r2
+     ON e2.region_id = r2.region_id
+    Where r2.region = 'Washington');
+
+Screenshot
+ 
+
+15.	Changing this question to increase difficulty. 
+
+ 	Original: Rank the labor force for each state as of 12/31/2024?
+	Updated: Compare the average weekly earnings for  all professions and the nation
+        from June 2019 to June 2020.
+
+       SQL
+SELECT  e.date, 
+        ea.ave_weekly_earnings, 
+        p.profession
+FROM region_rel r, earnings ea, employment e, prof_rel p
+WHERE r.region_id = e.region_id
+AND e.region_id = ea.region_id
+AND r.region = 'National'
+AND e.date = ea.date
+AND e.date in ('2019-06-30', '2020-06-30')
+AND ea.profession_id = p.profession_id
+ORDER BY p.profession, e.date
+
+Screenshot
+ 
+16.	I was having trouble answering this without using CTE’s which were not covered in class, so I changed it up. 
+Original: Which state saw the largest increase in unemployment from June 2019 to June 2020? How does this compare to the national change?
+
+Updated: What was the increase in unemployment for each region from June 2019 to June 2020?
+
+SQL
+SELECT  
+        r.region,
+        MAX(CASE WHEN e.date = '2020-06-30' THEN e.unemployment_rate END) AS rate_2020,
+        MAX(CASE WHEN e.date = '2019-06-30' THEN e.unemployment_rate END) AS rate_2019,
+        (MAX(CASE WHEN e.date = '2020-06-30' THEN e.unemployment_rate END) -
+         MAX(CASE WHEN e.date = '2019-06-30' THEN e.unemployment_rate END)) AS variance
+FROM region_rel r, employment e
+WHERE r.region_id = e.region_id
+AND e.date in ('2019-06-30', '2020-06-30')
+GROUP BY r.region
+ORDER BY (MAX(CASE WHEN e.date = '2020-06-30' THEN e.unemployment_rate END) -
+         MAX(CASE WHEN e.date = '2019-06-30' THEN e.unemployment_rate END)) DESC;
+
+Screenshot
+ 
+
+17.	This question was replaced in question 6.  
+
+Updated: What are the average weekly earnings of the top-earning profession in Oregon for the month of December 2021, and how does it compare to the state average weekly earnings?
+
+SQL
+SELECT 
+    p.profession AS top_profession,
+    AVG(e.ave_weekly_earnings) AS top_earnings,
+    (SELECT AVG(e2.ave_weekly_earnings)
+     FROM earnings e2
+     JOIN region_rel r2 ON e2.region_id = r2.region_id
+     WHERE r2.region = 'Oregon'
+       AND e2.date = '2021-12-31'
+    ) AS state_average_earnings
+FROM earnings e
+JOIN region_rel r ON e.region_id = r.region_id
+JOIN prof_rel p ON e.profession_id = p.profession_id
+WHERE r.region = 'Oregon'
+AND e.date = '2021-12-31'
+GROUP BY p.profession
+ORDER BY top_earnings DESC
+LIMIT 1;
+
+Screenshot
+ 
+
+18.	I modified this question to bring in another join and increase the difficulty.
+
+ What was the labor force participation rate and price of gas, when inflation rate was at a maximum and at a minimum?
+
+SQL
+SELECT 
+    i.date,
+    i.cpi,
+    e.labor_force_participation_rate,
+    fp.gas_gl
+FROM inflation i
+JOIN employment e ON i.date = e.date AND i.region_id = e.region_id
+JOIN food_prices fp ON i.date = fp.date AND i.region_id = fp.region_id
+WHERE i.cpi = (SELECT MAX(cpi) FROM inflation)
+   OR i.cpi = (SELECT MIN(cpi) FROM inflation)
+ORDER BY i.date;
+
+Screenshot
+ 
+
+19.	Which state(s) had a higher unemployment rate than the national rate in Dec 2021?
+
+SQL
+SELECT r.region AS state
+FROM employment e
+JOIN region_rel r ON e.region_id = r.region_id
+WHERE e.date = '2021-12-31'
+AND e.unemployment_rate > (
+        SELECT unemployment_rate
+        FROM employment
+        JOIN region_rel ON employment.region_id = region_rel.region_id
+        WHERE employment.date = '2021-12-31' 
+        AND region_rel.region = 'National')
+ORDER BY e.unemployment_rate DESC;
+
+Screenshot:
+ 
+
+20.	Over the last 5 years, what is the number of months where the inflation rate (less food and energy) been above the inflation rate for all goods?
+
+SQL
+SELECT COUNT(*) AS months_above
+FROM inflation
+WHERE cpi_less_food_energy > cpi
+AND date >= '2020-1-31'
+AND date <= '2024-12-31';
+
+Screenshot
+ 
+
+
+
+
+
